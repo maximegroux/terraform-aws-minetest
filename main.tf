@@ -1,102 +1,65 @@
 provider "aws" {
-  region = var.region
+  region = "eu-west-3"
 }
 
-resource "aws_vpc" "epsi-tf" {
-  cidr_block = "10.0.0.0/16"
-  
+resource "aws_vpc" "Johan" {
+  cidr_block = "192.168.1.0/24"
+
   tags = {
-    Name = "epsi-tf"
+    Name = "Johan-Network"
   }
 }
 
-resource "aws_subnet" "public-a" {
-  vpc_id     = aws_vpc.epsi-tf.id
-  cidr_block = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
-  
+resource "aws_subnet" "my_subnet" {
+  vpc_id            = aws_vpc.Johan.id
+  cidr_block        = "192.168.1.0/24"
+  availability_zone = "eu-west-3a"
+
   tags = {
-    Name = "public-a-tf"
+    Name = "Johan-Subnet"
   }
 }
 
-resource "aws_internet_gateway" "igw-tf" {
-  vpc_id = aws_vpc.epsi-tf.id
+resource "aws_instance" "Minetest" {
+  ami           = "ami-0d6aecf0f0425f42a"
+  instance_type = "t2.xlarge"
+  
+  tags = {
+      Name = "Minetest"
+  }
+  user_data = templatefile("${path.root}/minetest.sh", {
+    })
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.Johan.id
 
   tags = {
-    Name = "igw-tf"
+    Name = "main"
   }
 }
 
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.epsi-tf.id
+  vpc_id = aws_vpc.Johan.id
   route {
-  cidr_block = "0.0.0.0/0"
-  gateway_id = aws_internet_gateway.igw-tf.id
-}
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
 
   tags = {
-    Name = "public-tf"
+    Name = "public"
   }
 }
 
-resource "aws_route_table_association" "a" {
-  subnet_id = aws_subnet.public-a.id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "b" {
-  subnet_id = aws_subnet.public-b.id
-  route_table_id = aws_route_table.public.id
-}
-
-data "aws_ami" "ubuntu" {
-  most_recent = true
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["099720109477"]
-}
-
-resource "aws_instance" "wordpress" {
-    ami = data.aws_ami.ubuntu.id
-    instance_type = var.instance_type
-    vpc_security_group_ids = [aws_security_group.allow_http.id]
-    key_name = aws_key_pair.deployer.key_name
-    subnet_id     = aws_subnet.public-a.id
-    associate_public_ip_address = true
-
-    tags = merge(
-    {
-      "Name" = format("%s", var.name)
-    },
-    var.tags,
-    var.instance_tags,
-  )
-
-    user_data = templatefile("${path.root}/wordpress.sh", {
-      password = random_password.dbpassword.result
-      endpoint = aws_db_instance.dbWordPress.address
-    })
-  }
-  
-  resource "aws_security_group" "allow_http" {
-  name        = "allow_http"
-  description = "Allow http inbound traffic"
-  vpc_id      = aws_vpc.epsi-tf.id
+resource "aws_security_group" "allow_Minetest_tcp" {
+  name        = "allow_Minetest_tcp"
+  description = "Allow Minetest_tcp inbound traffic"
+  vpc_id      = aws_vpc.Johan.id
 
   ingress {
-    description = "HTTP from VPC"
-    from_port   = 80
-    to_port     = 80
+    description = "Minetest from VPC_tcp"
+    from_port   = 30000
+    to_port     = 30000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -109,83 +72,31 @@ resource "aws_instance" "wordpress" {
   }
 
   tags = {
-    Name = "allow_http"
+    Name = "allow_Minetest_tcp"
   }
 }
 
-resource "tls_private_key" "example" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
-resource "aws_key_pair" "deployer" {
-  key_name   = "ec2-key-tf"
-  public_key = tls_private_key.example.public_key_openssh
-}
-
-resource "random_password" "dbpassword" {
-  length = 16
-  special = false
-}
-
-resource "aws_security_group" "allow_rds" {
-  name        = "allow_rds"
-  description = "Allow mysql inbound traffic"
-  vpc_id      = aws_vpc.epsi-tf.id
+resource "aws_security_group" "allow_Minetest_udp" {
+  name        = "allow_Minetest_udp"
+  description = "Allow Minetest_tcp inbound traffic"
+  vpc_id      = aws_vpc.Johan.id
 
   ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    security_groups = [aws_security_group.allow_http.id]
+    description = "Minetest from VPC_udp"
+    from_port   = 30000
+    to_port     = 30000
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   egress {
-  from_port   = 0
-  to_port     = 0
-  protocol    = "-1"
-  cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
-    Name = "allow_http-tf"
+    Name = "allow_Minetest_udp"
   }
-}
-
-resource "aws_db_subnet_group" "rds" {
-  name       = "wordpress"
-  subnet_ids = [aws_subnet.private-a.id, aws_subnet.private-b.id]
-
-  tags = {
-    Name = "wordpress-rds"
-  }
-}
-
-resource "aws_db_instance" "dbWordPress" {
-  engine = "mysql"
-  engine_version = "5.7"
-  allocated_storage = 20
-  instance_class = "db.t2.micro"
-  vpc_security_group_ids = [aws_security_group.allow_rds.id]
-  db_subnet_group_name = aws_db_subnet_group.rds.name
-  name = "wordpress"
-  username = "admin"
-  password = random_password.dbpassword.result
-  skip_final_snapshot = true
-  
-  tags = {
-      Name = "WordPress DB"
-  }
-}
-
-output "db_password" {
-  value = random_password.dbpassword.result
-}
-
-output "public_ip" {
- value = aws_instance.wordpress.public_ip
-}
-
-output "private_key" {
-  value = tls_private_key.example.private_key_pem
 }

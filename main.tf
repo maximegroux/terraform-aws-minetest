@@ -20,16 +20,25 @@ resource "aws_subnet" "my_subnet" {
   }
 }
 
-resource "aws_instance" "Minetest" {
-  ami           = "ami-0d6aecf0f0425f42a"
-  instance_type = "t2.xlarge"
-  
-  tags = {
-      Name = "Minetest"
+resource "aws_instance" "minetest" {
+    ami = data.aws_ami.ubuntu.id
+    instance_type = "t2.xlarge"
+    vpc_security_group_ids = [aws_security_group.allow_minetest.id]
+    subnet_id     = aws_subnet.public.id
+    associate_public_ip_address = true
+    
+    provisioner "file" {
+      source      = "minetest.sh"
+      destination = "/tmp/minetest.sh"
+    }
+
+    provisioner "remote-exec" {
+      inline = [
+        "chmod +x /tmp/script.sh",
+        "/tmp/script.sh args",
+      ]
+    }  
   }
-  user_data = templatefile("${path.root}/minetest.sh", {
-    })
-}
 
 resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.Johan.id

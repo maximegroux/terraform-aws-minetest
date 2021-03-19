@@ -31,6 +31,13 @@ resource "aws_instance" "minetest" {
       source      = "minetest.sh"
       destination = "/tmp/minetest.sh"
     }
+  
+    connection {
+      type     = "ssh"
+      user     = "root"
+      password = "${var.root_password}"
+      host     = "${var.host}"
+    }
 
     provisioner "remote-exec" {
       inline = [
